@@ -69,3 +69,11 @@ src/
   canvas/   QGraphicsView editor: NodeItem, PortItem, ConnectionItem, scene, view
   app/      MainWindow, node palette, properties panel
 ```
+
+## License
+
+Copyright © 2026 the avena authors — [manuel-alcocer](https://github.com/manuel-alcocer)
+and [prietus](https://github.com/prietus).
+
+avena is free software, licensed under the **GNU General Public License v3.0**.
+See [LICENSE](LICENSE) for the full text.
