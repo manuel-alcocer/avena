@@ -69,7 +69,7 @@ void PropertiesPanel::resetToDefaults()
     for (const ElementProperty& p : ElementProperties::forElement(m_node->typeId))
         m_node->properties.remove(p.name);
 
-    // Restore catalog defaults (scale/start/end/bypass/…) but keep the file path.
+    // Restore catalog defaults (e.g. a File Source's start/end) but keep the path.
     if (const NodeTypeSpec* spec = NodeCatalog::instance().find(m_node->typeId)) {
         for (auto it = spec->defaultProperties.constBegin();
              it != spec->defaultProperties.constEnd(); ++it) {

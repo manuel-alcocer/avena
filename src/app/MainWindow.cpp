@@ -25,6 +25,8 @@
 #include <QProgressBar>
 #include <QStatusBar>
 #include <QStyle>
+#include <QTabBar>
+#include <QTimer>
 #include <QToolBar>
 #include <QVBoxLayout>
 #include <QWidget>
@@ -45,8 +47,8 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
     m_preview = new MediaPreview(this);
 
     createActions();
-    createDocks();
     createPipelineDock();
+    createDocks();
 
     connect(m_runner, &PipelineRunner::started, this, [this] {
         m_runAction->setText(tr("Stop"));
@@ -87,6 +89,7 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
     connect(m_scene, &NodeEditorScene::selectedNodeChanged, this, [this](Node* node) {
         m_properties->setNode(node);
         m_info->setNode(node);
+        setSidePanelsActive(node != nullptr);
     });
     connect(m_scene, &NodeEditorScene::nodeModified, this, [this](Node* node) {
         m_properties->onNodeModified(node);
@@ -261,28 +264,32 @@ void MainWindow::createDocks()
     tabifyDockWidget(paletteDock, templatesDock);
     paletteDock->raise();
 
-    auto* propsDock = new QDockWidget(tr("Properties"), this);
-    propsDock->setObjectName(QStringLiteral("propertiesDock"));
-    m_properties = new PropertiesPanel(propsDock);
+    m_propertiesDock = new QDockWidget(tr("Properties"), this);
+    m_propertiesDock->setObjectName(QStringLiteral("propertiesDock"));
+    m_properties = new PropertiesPanel(m_propertiesDock);
     m_properties->setGraph(m_graph);
-    propsDock->setWidget(m_properties);
-    addDockWidget(Qt::RightDockWidgetArea, propsDock);
+    m_propertiesDock->setWidget(m_properties);
+    addDockWidget(Qt::BottomDockWidgetArea, m_propertiesDock);
 
-    auto* infoDock = new QDockWidget(tr("Info"), this);
-    infoDock->setObjectName(QStringLiteral("infoDock"));
-    m_info = new InfoPanel(infoDock);
-    infoDock->setWidget(m_info);
-    addDockWidget(Qt::RightDockWidgetArea, infoDock);
+    m_infoDock = new QDockWidget(tr("Info"), this);
+    m_infoDock->setObjectName(QStringLiteral("infoDock"));
+    m_info = new InfoPanel(m_infoDock);
+    m_infoDock->setWidget(m_info);
+    addDockWidget(Qt::BottomDockWidgetArea, m_infoDock);
 
-    // Stack Properties and Info as tabs in the right area, Info shown first.
-    tabifyDockWidget(propsDock, infoDock);
-    infoDock->raise();
+    // Stack Pipeline, Properties and Info as tabs along the bottom so the canvas
+    // gets the full width. Properties/Info only have content when a node is
+    // selected, so start with them disabled and the Pipeline tab as the fallback.
+    tabifyDockWidget(m_pipelineDock, m_propertiesDock);
+    tabifyDockWidget(m_propertiesDock, m_infoDock);
+    setSidePanelsActive(false);
 }
 
 void MainWindow::createPipelineDock()
 {
     auto* dock = new QDockWidget(tr("Pipeline"), this);
     dock->setObjectName(QStringLiteral("pipelineDock"));
+    m_pipelineDock = dock;
 
     auto* host = new QWidget(dock);
     auto* layout = new QVBoxLayout(host);
@@ -301,6 +308,41 @@ void MainWindow::createPipelineDock()
 
     dock->setWidget(host);
     addDockWidget(Qt::BottomDockWidgetArea, dock);
+}
+
+void MainWindow::applyPanelTabEnabled()
+{
+    // The bottom docks share a QTabBar created by QMainWindow; find the tabs that
+    // belong to Properties/Info (matched by their dock titles) and toggle them.
+    const QString propsTitle = m_propertiesDock->windowTitle();
+    const QString infoTitle = m_infoDock->windowTitle();
+    for (QTabBar* bar : findChildren<QTabBar*>()) {
+        for (int i = 0; i < bar->count(); ++i) {
+            const QString title = bar->tabText(i);
+            if (title == propsTitle || title == infoTitle)
+                bar->setTabEnabled(i, m_sidePanelsActive);
+        }
+    }
+}
+
+void MainWindow::setSidePanelsActive(bool active)
+{
+    const bool was = m_sidePanelsActive;
+    m_sidePanelsActive = active;
+    applyPanelTabEnabled();
+
+    if (active && !was)
+        m_propertiesDock->raise();   // first selection → reveal the node's properties
+    else if (!active)
+        m_pipelineDock->raise();     // nothing selected → fall back to Pipeline
+}
+
+void MainWindow::showEvent(QShowEvent* event)
+{
+    QMainWindow::showEvent(event);
+    // The dock QTabBar is created during layout, which isn't done yet inside the
+    // synchronous showEvent; defer so the initial disabled state actually sticks.
+    QTimer::singleShot(0, this, [this] { applyPanelTabEnabled(); });
 }
 
 bool MainWindow::confirmReplacePipeline()

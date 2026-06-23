@@ -445,17 +445,6 @@ bool PipelineRunner::run(const Graph& graph, QString* error)
     QHash<int, SourceContext*> sourceForNode; // node id -> its decodebin context
     int sinkCount = 0;
 
-    // Active time range (applied seek-free via decoder pad probes).
-    gint64 trimStart = -1, trimStop = -1;
-    for (const auto& node : graph.nodes()) {
-        if (node->typeId == QLatin1String("tool.timerange") &&
-            !node->properties.value(QStringLiteral("bypass")).toBool()) {
-            trimStart = parseTimeNs(node->properties.value(QStringLiteral("start")).toString());
-            trimStop  = parseTimeNs(node->properties.value(QStringLiteral("end")).toString());
-            break;
-        }
-    }
-
     // 1) Create one (or more) GStreamer elements per node.
     for (const auto& node : graph.nodes()) {
         if (node->typeId == QLatin1String("source.file")) {
@@ -474,17 +463,26 @@ bool PipelineRunner::run(const Graph& graph, QString* error)
             ctx->pipeline = d->pipeline;
             ctx->filesrc = filesrc;
             ctx->decodebin = decodebin;
-            ctx->trimStart = trimStart;
-            ctx->trimStop = trimStop;
+            // Per-source time range, applied seek-free via the decoder pad probes
+            // (empty start/end → -1 → no trim, i.e. the whole file).
+            ctx->trimStart = parseTimeNs(node->properties.value(QStringLiteral("start")).toString());
+            ctx->trimStop  = parseTimeNs(node->properties.value(QStringLiteral("end")).toString());
+            if (ctx->trimStart >= 0 || ctx->trimStop >= 0)
+                emit logMessage(QStringLiteral("Time range (%1): %2s → %3")
+                    .arg(QFileInfo(location).fileName())
+                    .arg((ctx->trimStart >= 0 ? ctx->trimStart : 0) / static_cast<double>(GST_SECOND), 0, 'f', 2)
+                    .arg(ctx->trimStop >= 0
+                         ? QStringLiteral("%1s").arg(ctx->trimStop / static_cast<double>(GST_SECOND), 0, 'f', 2)
+                         : QStringLiteral("end")));
             g_signal_connect(decodebin, "pad-added", G_CALLBACK(onPadAdded), ctx.get());
 
             elementForNode.insert(node->id, decodebin);
             sourceForNode.insert(node->id, ctx.get());
             d->sources.push_back(std::move(ctx));
         } else if (isToolNode(*node)) {
-            // Tools (Time Range, Bitrate) are passthrough markers in the media
-            // path; they map to an identity element. Their effect is applied
-            // separately (segment seek / property binding).
+            // Tools (e.g. the Stream Inspector) are passthrough markers in the
+            // media path; they map to an identity element. Their effect is
+            // applied separately (property binding).
             GstElement* element = makeAdd(d->pipeline, "identity");
             if (!element)
                 return fail(QStringLiteral("Missing core element (identity)."));
@@ -629,14 +627,8 @@ bool PipelineRunner::run(const Graph& graph, QString* error)
         emit logMessage(QStringLiteral("Output: %1").arg(location));
     }
 
-    // 4) Go. (Time-range trimming is applied by the decoder pad probes.)
-    if (trimStart >= 0 || trimStop >= 0)
-        emit logMessage(QStringLiteral("Time range: %1s → %2")
-                            .arg((trimStart >= 0 ? trimStart : 0) / static_cast<double>(GST_SECOND), 0, 'f', 2)
-                            .arg(trimStop >= 0
-                                 ? QStringLiteral("%1s").arg(trimStop / static_cast<double>(GST_SECOND), 0, 'f', 2)
-                                 : QStringLiteral("end")));
-
+    // 4) Go. (Per-source time-range trimming is applied by the decoder pad
+    // probes; see the File Source branch above.)
     d->running = true;
     if (gst_element_set_state(d->pipeline, GST_STATE_PLAYING) == GST_STATE_CHANGE_FAILURE)
         return fail(QStringLiteral("Failed to start the pipeline."));

@@ -80,25 +80,24 @@ change signals; the canvas listens. Ownership never flows the other way.
   only offered when the encoders it needs are actually installed. Users can save
   their own templates as `.abk` files.
 
-### Tool nodes (`tool.*`)
+### Nodes with special backend handling
 
-Built-in nodes in the **Tools** category that don't map to a single GStreamer
-element; the execution backend gives them special handling.
+A few node types don't map straightforwardly to a single GStreamer element; the
+execution backend gives them special treatment.
 
 - **File Source** (`source.file`) — a source node holding a `location` property.
   Setting its location **probes** the media and rebuilds its output ports to
   match the file's streams (video/audio/subtitle), dropping any now-invalid
-  outgoing connections.
-- **Time Range** (`tool.timerange`) — restricts the pipeline to a `[start, end]`
-  time window (properties `start`, `end`, and `bypass`). The runner enforces the
-  window with a pad probe that drops frames before `start` and sends EOS at
-  `end`; toggling **Bypass** processes the whole file. Pass-through ports
-  (`Any → Any`).
-- **Stream Inspector** (`tool.inspector`) — passes a stream through unchanged and
-  exposes its properties (bitrate, resolution, fps, channels…) as `Value`
-  outputs you can wire into other nodes' aux inputs. The available outputs follow
-  the connected stream type, and are rebuilt when its enable flags or input
-  connection change.
+  outgoing connections. It also carries `start` / `end` properties that **trim**
+  decoding to a `[start, end]` time window applied to all of this source's
+  streams (empty = no trim, the whole file). Trimming is a property of the source
+  because it is enforced at its decoded pads — see
+  [ADR-0010](docs/adr/0010-time-range-as-file-source-property.md).
+- **Stream Inspector** (`tool.inspector`) — the lone node in the **Tools**
+  category. Passes a stream through unchanged and exposes its properties
+  (bitrate, resolution, fps, channels…) as `Value` outputs you can wire into
+  other nodes' aux inputs. The available outputs follow the connected stream
+  type, and are rebuilt when its enable flags or input connection change.
 
 ### GStreamer side
 

@@ -1,6 +1,6 @@
 # 8. Confine the GStreamer mapping to the execution backend
 
-- Status: Accepted
+- Status: Accepted (amended by [ADR-0010](0010-time-range-as-file-source-property.md))
 - Date: 2026-06-21
 
 ## Context

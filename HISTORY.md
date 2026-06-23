@@ -1,5 +1,11 @@
 # History
 
+## 2026-06-23
+
+- **feat:** per-source trim and unified bottom-tab panel
+- **refactor:** move time range to File Source; bottom-tab the panels
+- **feat:** rework time-range trimming and editor layout
+
 ## 2026-06-21
 
 - **docs(adr):** record existing architecture decisions retrospectively

@@ -35,6 +35,11 @@ namespace {
 
 /// The fixed "Sources" entry. The File Source is special: its output ports are
 /// rebuilt from the probed media streams when a file is assigned.
+///
+/// `start`/`end` restrict decoding to a [start, end] time window applied to all
+/// of this source's streams (empty = no trim, i.e. the whole file). Trimming is
+/// a property of the source because it is enforced at its decoded pads, not by
+/// routing a single stream through a separate node.
 NodeTypeSpec fileSourceSpec()
 {
     return NodeTypeSpec{
@@ -42,37 +47,22 @@ NodeTypeSpec fileSourceSpec()
         .displayName = QStringLiteral("File Source"),
         .longName    = QStringLiteral("File Source"),
         .description = QStringLiteral("Reads a media file and decodes its "
-                                      "video, audio and subtitle streams."),
+                                      "video, audio and subtitle streams. "
+                                      "Optionally trim to a [start, end] window."),
         .category    = kSources,
         .color       = kSourceColor,
         .inputs      = {},
         .outputs     = { {QStringLiteral("video"), MediaType::Video},
                          {QStringLiteral("audio"), MediaType::Audio} },
-        .defaultProperties = { {QStringLiteral("location"), QString()} },
+        .defaultProperties = { {QStringLiteral("location"), QString()},
+                               {QStringLiteral("start"),    QString()},
+                               {QStringLiteral("end"),      QString()} },
     };
 }
 
 /// Built-in "Tools" nodes that don't map to a single GStreamer element.
 std::vector<NodeTypeSpec> toolSpecs()
 {
-    NodeTypeSpec timeRange{
-        .typeId      = QStringLiteral("tool.timerange"),
-        .displayName = QStringLiteral("Time Range"),
-        .longName    = QStringLiteral("Time Range"),
-        .description = QStringLiteral("Restrict the pipeline to a [start, end] "
-            "time window. Toggle Bypass to process the whole file. Handy for "
-            "quickly testing a pipeline on a short segment."),
-        .category    = kTools,
-        .color       = kToolColor,
-        .inputs      = { {QStringLiteral("in"),  MediaType::Any} },
-        .outputs     = { {QStringLiteral("out"), MediaType::Any} },
-        .defaultProperties = {
-            {QStringLiteral("start"),  QString()},
-            {QStringLiteral("end"),    QString()},
-            {QStringLiteral("bypass"), false},
-        },
-    };
-
     NodeTypeSpec inspector{
         .typeId      = QStringLiteral("tool.inspector"),
         .displayName = QStringLiteral("Inspector"),
@@ -88,7 +78,7 @@ std::vector<NodeTypeSpec> toolSpecs()
         .defaultProperties = {},
     };
 
-    return {timeRange, inspector};
+    return {inspector};
 }
 
 } // namespace
